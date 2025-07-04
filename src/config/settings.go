@@ -8,7 +8,7 @@ var (
 	AppVersion               = "v6.1.2"
 	AppPort                  = "3000"
 	AppDebug                 = false
-	AppOs                    = "AldinoKemal"
+	AppOs                    = "Nebula Zap"
 	AppPlatform              = waCompanionReg.DeviceProps_PlatformType(1)
 	AppBasicAuthCredential   []string
 	AppChatFlushIntervalDays = 7 // Number of days before flushing chat.csv
