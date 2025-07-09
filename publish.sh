@@ -36,15 +36,8 @@ validate_args() {
         exit 1
     fi
     
-    # Validação do ambiente
-    case "$1" in
-        dev|staging|prd|test)
-            AMBIENTE=$1
-            ;;
-        *)
-            handle_error "Ambiente inválido: $1. Use: dev, staging, prd, test"
-            ;;
-    esac
+    # Define o ambiente (sem validação específica)
+    AMBIENTE=$1
     
     # Validação da versão (formato semântico)
     if [[ ! $2 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
