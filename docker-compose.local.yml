@@ -1,20 +1,14 @@
 services:
   whatsapp:
-    # Opção 1: Usar imagem do Docker Hub (comentada)
-    # image: aldinokemal2104/go-whatsapp-web-multidevice
-    
-    # Opção 2: Construir imagem a partir do código local
     build:
       context: .
       dockerfile: docker/golang.Dockerfile
-    
-    container_name: whatsapp
+    container_name: whatsapp-local
     restart: always
     ports:
       - "3500:3000"
     volumes:
       - whatsapp:/app/storages
-      # Volume adicional para desenvolvimento local
       - ./src/statics:/app/statics
     environment:
       WHATSAPP_WEBHOOK: https://webhook.site/81ff43c2-547b-4c8b-8ad1-f9d503621faa
@@ -28,4 +22,4 @@ services:
       - --webhook="https://webhook.site/81ff43c2-547b-4c8b-8ad1-f9d503621faa"
 
 volumes:
-  whatsapp:
+  whatsapp: 
