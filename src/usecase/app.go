@@ -60,7 +60,11 @@ func (service serviceApp) Login(_ context.Context) (response domainApp.LoginResp
 		go func() {
 			for evt := range ch {
 				response.Code = evt.Code
-				response.Duration = evt.Timeout / time.Second / 2
+				// NOTA: Anteriormente o timeout era dividido por 2 para dar margem de segurança ao usuário
+				// e evitar que o QR code expirasse enquanto o usuário ainda estava tentando escanear.
+				// Isso foi removido para permitir que o usuário tenha o tempo total disponível
+				// para escanear o QR code conforme definido pelo WhatsApp.
+				response.Duration = evt.Timeout / time.Second
 				if evt.Event == "code" {
 					qrPath := fmt.Sprintf("%s/scan-qr-%s.png", config.PathQrCode, fiberUtils.UUIDv4())
 					err = qrcode.WriteFile(evt.Code, qrcode.Medium, 512, qrPath)

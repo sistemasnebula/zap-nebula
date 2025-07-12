@@ -1836,7 +1836,8 @@ components:
           properties:
             qr_duration:
               type: integer
-              example: 30
+              example: 60
+              description: "Duration in seconds until QR code expires (real WhatsApp timeout)"
             qr_link:
               type: string
               example: 'http://localhost:3000/statics/images/qrcode/scan-qr-b0b7bb43-9a22-455a-814f-5a225c743310.png'
