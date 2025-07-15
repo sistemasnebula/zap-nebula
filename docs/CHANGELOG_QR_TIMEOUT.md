@@ -1,50 +1,48 @@
 # 📝 Changelog - Timeout do QR Code
 
-## 🔄 Versão 6.1.3 - Janeiro 2025
+## 🔄 Versão 6.1.4 - Julho de 2025
 
-### ✅ Melhorias Implementadas
+### ✅ Alteração Revertida
 
-#### **Timeout do QR Code Corrigido**
+#### **Timeout do QR Code novamente reduzido pela metade**
 - **Arquivo:** `src/usecase/app.go`
-- **Mudança:** Removida divisão por 2 do timeout do WhatsApp
-- **Impacto:** Usuário agora tem o tempo total real para escanear o QR code
+- **Mudança:** Timeout do WhatsApp volta a ser dividido por 2
+- **Impacto:** Usuário tem metade do tempo real para escanear o QR code, como margem de segurança
 
 ### 📊 Detalhes das Alterações
 
 #### **Antes:**
 ```go
-response.Duration = evt.Timeout / time.Second / 2  // 30 segundos
+response.Duration = evt.Timeout / time.Second  // 60 segundos
 ```
 
 #### **Depois:**
 ```go
-// NOTA: Anteriormente o timeout era dividido por 2 para dar margem de segurança ao usuário
-// e evitar que o QR code expirasse enquanto o usuário ainda estava tentando escanear.
-// Isso foi removido para permitir que o usuário tenha o tempo total disponível
-// para escanear o QR code conforme definido pelo WhatsApp.
-response.Duration = evt.Timeout / time.Second  // 60 segundos
+// NOTA: O timeout volta a ser dividido por 2 para dar margem de segurança ao usuário
+// e evitar que o QR code expire enquanto o usuário ainda está tentando escanear.
+response.Duration = evt.Timeout / time.Second / 2  // 30 segundos
 ```
 
 ### 📋 Arquivos Modificados
 
 1. **`src/usecase/app.go`**
-   - Linha 62: Removida divisão por 2
-   - Adicionada documentação explicativa
+   - Linha 62: Timeout volta a ser dividido por 2
+   - Comentário explicativo atualizado
 
 2. **`docs/openapi.yaml`**
-   - Exemplo atualizado de 30 para 60 segundos
-   - Adicionada descrição explicativa
+   - Exemplo ajustado de 60 para 30 segundos
+   - Descrição explicativa atualizada
 
-3. **`docs/QR_TIMEOUT_CHANGES.md`** *(novo)*
-   - Documentação completa das mudanças
-   - Explicação do problema e solução
+3. **`docs/QR_TIMEOUT_CHANGES.md`**
+   - Documentação revisada para refletir a volta da divisão por 2
+   - Explicação do motivo da alteração
 
-### 🎯 Benefícios para o Usuário
+### 🎯 Benefícios e Pontos de Atenção
 
-- ✅ **Mais tempo** para escanear o QR code (60s vs 30s)
-- ✅ **Consistência** entre interface e funcionalidade
-- ✅ **Experiência melhorada** no processo de login
-- ✅ **Redução de falhas** por timeout prematuro
+- ✅ **Margem de segurança**: Reduz risco do QR code expirar enquanto o usuário tenta escanear
+- ⚠️ **Menos tempo para o usuário**: Pode aumentar a sensação de pressa ou frustração
+- ✅ **Consistência** com versões anteriores
+- ✅ **Experiência previsível** para o sistema
 
 ### 🔧 Compatibilidade
 
@@ -62,6 +60,6 @@ response.Duration = evt.Timeout / time.Second  // 60 segundos
 ### 🚀 Próximos Passos
 
 1. **Testar** a mudança em ambiente de desenvolvimento
-2. **Validar** que o timeout real é de 60 segundos
-3. **Monitorar** taxa de sucesso no login
-4. **Considerar** configuração customizável no futuro 
+2. **Validar** que o timeout exibido é metade do real
+3. **Monitorar** taxa de sucesso no login e feedback dos usuários
+4. **Avaliar** ajuste fino da margem de segurança se necessário 
