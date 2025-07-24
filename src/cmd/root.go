@@ -2,30 +2,33 @@ package cmd
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"fmt"
+	"go.mau.fi/whatsmeow/store/sqlstore"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainApp "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/app"
+	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
+	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	domainGroup "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/group"
 	domainMessage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/message"
 	domainNewsletter "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/newsletter"
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
 	domainUser "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/user"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/usecase"
+	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/store/sqlstore"
-
-	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -34,10 +37,14 @@ var (
 
 	// Whatsapp
 	whatsappCli *whatsmeow.Client
-	whatsappDB  *sqlstore.Container
+
+	// Chat Storage
+	chatStorageDB   *sql.DB
+	chatStorageRepo domainChatStorage.IChatStorageRepository
 
 	// Usecase
 	appUsecase        domainApp.IAppUsecase
+	chatUsecase       domainChat.IChatUsecase
 	sendUsecase       domainSend.ISendUsecase
 	userUsecase       domainUser.IUserUsecase
 	messageUsecase    domainMessage.IMessageUsecase
@@ -84,18 +91,21 @@ func initEnvConfig() {
 		credential := strings.Split(envBasicAuth, ",")
 		config.AppBasicAuthCredential = credential
 	}
-	if envChatFlushInterval := viper.GetInt("app_chat_flush_interval"); envChatFlushInterval > 0 {
-		config.AppChatFlushIntervalDays = envChatFlushInterval
-	}
 
 	// Database settings
 	if envDBURI := viper.GetString("db_uri"); envDBURI != "" {
 		config.DBURI = envDBURI
 	}
+	if envDBKEYSURI := viper.GetString("db_keys_uri"); envDBKEYSURI != "" {
+		config.DBKeysURI = envDBKEYSURI
+	}
 
 	// WhatsApp settings
 	if envAutoReply := viper.GetString("whatsapp_auto_reply"); envAutoReply != "" {
 		config.WhatsappAutoReplyMessage = envAutoReply
+	}
+	if viper.IsSet("whatsapp_auto_mark_read") {
+		config.WhatsappAutoMarkRead = viper.GetBool("whatsapp_auto_mark_read")
 	}
 	if envWebhook := viper.GetString("whatsapp_webhook"); envWebhook != "" {
 		webhook := strings.Split(envWebhook, ",")
@@ -106,9 +116,6 @@ func initEnvConfig() {
 	}
 	if viper.IsSet("whatsapp_account_validation") {
 		config.WhatsappAccountValidation = viper.GetBool("whatsapp_account_validation")
-	}
-	if viper.IsSet("whatsapp_chat_storage") {
-		config.WhatsappChatStorage = viper.GetBool("whatsapp_chat_storage")
 	}
 }
 
@@ -139,12 +146,6 @@ func initFlags() {
 		config.AppBasicAuthCredential,
 		"basic auth credential | -b=yourUsername:yourPassword",
 	)
-	rootCmd.PersistentFlags().IntVarP(
-		&config.AppChatFlushIntervalDays,
-		"chat-flush-interval", "",
-		config.AppChatFlushIntervalDays,
-		`the interval to flush the chat storage --chat-flush-interval <number> | example: --chat-flush-interval=7`,
-	)
 
 	// Database flags
 	rootCmd.PersistentFlags().StringVarP(
@@ -153,6 +154,12 @@ func initFlags() {
 		config.DBURI,
 		`the database uri to store the connection data database uri (by default, we'll use sqlite3 under storages/whatsapp.db). database uri --db-uri <string> | example: --db-uri="file:storages/whatsapp.db?_foreign_keys=on or postgres://user:password@localhost:5432/whatsapp"`,
 	)
+	rootCmd.PersistentFlags().StringVarP(
+		&config.DBKeysURI,
+		"db-keys-uri", "",
+		config.DBKeysURI,
+		`the database uri to store the keys database uri (by default, we'll use the same database uri). database uri --db-keys-uri <string> | example: --db-keys-uri="file::memory:?cache=shared&_foreign_keys=on"`,
+	)
 
 	// WhatsApp flags
 	rootCmd.PersistentFlags().StringVarP(
@@ -160,6 +167,12 @@ func initFlags() {
 		"autoreply", "",
 		config.WhatsappAutoReplyMessage,
 		`auto reply when received message --autoreply <string> | example: --autoreply="Don't reply this message"`,
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.WhatsappAutoMarkRead,
+		"auto-mark-read", "",
+		config.WhatsappAutoMarkRead,
+		`auto mark incoming messages as read --auto-mark-read <true/false> | example: --auto-mark-read=true`,
 	)
 	rootCmd.PersistentFlags().StringSliceVarP(
 		&config.WhatsappWebhook,
@@ -179,18 +192,38 @@ func initFlags() {
 		config.WhatsappAccountValidation,
 		`enable or disable account validation --account-validation <true/false> | example: --account-validation=true`,
 	)
-	rootCmd.PersistentFlags().BoolVarP(
-		&config.WhatsappChatStorage,
-		"chat-storage", "",
-		config.WhatsappChatStorage,
-		`enable or disable chat storage --chat-storage <true/false>. If you disable this, reply feature maybe not working properly | example: --chat-storage=true`,
-	)
+}
+
+func initChatStorage() (*sql.DB, error) {
+	connStr := fmt.Sprintf("%s?_journal_mode=WAL", config.ChatStorageURI)
+	if config.ChatStorageEnableForeignKeys {
+		connStr += "&_foreign_keys=on"
+	}
+
+	db, err := sql.Open("sqlite3", connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure connection pool
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+
+	// Test connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return db, nil
 }
 
 func initApp() {
 	if config.AppDebug {
 		config.WhatsappLogLevel = "DEBUG"
+		logrus.SetLevel(logrus.DebugLevel)
 	}
+
 	//preparing folder if not exist
 	err := utils.CreateFolder(config.PathQrCode, config.PathSendItems, config.PathStorages, config.PathMedia)
 	if err != nil {
@@ -198,16 +231,32 @@ func initApp() {
 	}
 
 	ctx := context.Background()
-	whatsappDB = whatsapp.InitWaDB(ctx)
-	whatsappCli = whatsapp.InitWaCLI(ctx, whatsappDB)
+
+	chatStorageDB, err = initChatStorage()
+	if err != nil {
+		// Terminate the application if chat storage fails to initialize to avoid nil pointer panics later.
+		logrus.Fatalf("failed to initialize chat storage: %v", err)
+	}
+
+	chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
+	chatStorageRepo.InitializeSchema()
+
+	whatsappDB := whatsapp.InitWaDB(ctx, config.DBURI)
+	var keysDB *sqlstore.Container
+	if config.DBKeysURI != "" {
+		keysDB = whatsapp.InitWaDB(ctx, config.DBKeysURI)
+	}
+
+	whatsapp.InitWaCLI(ctx, whatsappDB, keysDB, chatStorageRepo)
 
 	// Usecase
-	appUsecase = usecase.NewAppService(whatsappCli, whatsappDB)
-	sendUsecase = usecase.NewSendService(whatsappCli, appUsecase)
-	userUsecase = usecase.NewUserService(whatsappCli)
-	messageUsecase = usecase.NewMessageService(whatsappCli)
-	groupUsecase = usecase.NewGroupService(whatsappCli)
-	newsletterUsecase = usecase.NewNewsletterService(whatsappCli)
+	appUsecase = usecase.NewAppService(chatStorageRepo)
+	chatUsecase = usecase.NewChatService(chatStorageRepo)
+	sendUsecase = usecase.NewSendService(appUsecase, chatStorageRepo)
+	userUsecase = usecase.NewUserService()
+	messageUsecase = usecase.NewMessageService(chatStorageRepo)
+	groupUsecase = usecase.NewGroupService()
+	newsletterUsecase = usecase.NewNewsletterService()
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

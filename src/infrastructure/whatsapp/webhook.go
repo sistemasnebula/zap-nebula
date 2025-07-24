@@ -13,7 +13,9 @@ import (
 	"go.mau.fi/whatsmeow/types"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
+	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -36,12 +38,15 @@ func forwardToWebhook(ctx context.Context, evt *events.Message) error {
 	return nil
 }
 
-func createPayload(ctx context.Context, evt *events.Message) (map[string]interface{}, error) {
-	message := buildEventMessage(evt)
-	waReaction := buildEventReaction(evt)
-	forwarded := buildForwarded(evt)
+func createPayload(ctx context.Context, evt *events.Message) (map[string]any, error) {
+	message := utils.BuildEventMessage(evt)
+	waReaction := utils.BuildEventReaction(evt)
+	forwarded := utils.BuildForwarded(evt)
 
-	body := make(map[string]interface{})
+	body := make(map[string]any)
+
+	body["sender_id"] = evt.Info.Sender.User
+	body["chat_id"] = evt.Info.Chat.User
 
 	if from := evt.Info.SourceString(); from != "" {
 		body["from"] = from
@@ -137,7 +142,7 @@ func createPayload(ctx context.Context, evt *events.Message) (map[string]interfa
 	}
 
 	if audioMedia := evt.Message.GetAudioMessage(); audioMedia != nil {
-		path, err := ExtractMedia(ctx, config.PathMedia, audioMedia)
+		path, err := utils.ExtractMedia(ctx, cli, config.PathMedia, audioMedia)
 		if err != nil {
 			logrus.Errorf("Failed to download audio from %s: %v", evt.Info.SourceString(), err)
 			return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download audio: %v", err))
@@ -150,7 +155,7 @@ func createPayload(ctx context.Context, evt *events.Message) (map[string]interfa
 	}
 
 	if documentMedia := evt.Message.GetDocumentMessage(); documentMedia != nil {
-		path, err := ExtractMedia(ctx, config.PathMedia, documentMedia)
+		path, err := utils.ExtractMedia(ctx, cli, config.PathMedia, documentMedia)
 		if err != nil {
 			logrus.Errorf("Failed to download document from %s: %v", evt.Info.SourceString(), err)
 			return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download document: %v", err))
@@ -159,7 +164,7 @@ func createPayload(ctx context.Context, evt *events.Message) (map[string]interfa
 	}
 
 	if imageMedia := evt.Message.GetImageMessage(); imageMedia != nil {
-		path, err := ExtractMedia(ctx, config.PathMedia, imageMedia)
+		path, err := utils.ExtractMedia(ctx, cli, config.PathMedia, imageMedia)
 		if err != nil {
 			logrus.Errorf("Failed to download image from %s: %v", evt.Info.SourceString(), err)
 			return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download image: %v", err))
@@ -184,7 +189,7 @@ func createPayload(ctx context.Context, evt *events.Message) (map[string]interfa
 	}
 
 	if stickerMedia := evt.Message.GetStickerMessage(); stickerMedia != nil {
-		path, err := ExtractMedia(ctx, config.PathMedia, stickerMedia)
+		path, err := utils.ExtractMedia(ctx, cli, config.PathMedia, stickerMedia)
 		if err != nil {
 			logrus.Errorf("Failed to download sticker from %s: %v", evt.Info.SourceString(), err)
 			return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download sticker: %v", err))
@@ -193,7 +198,7 @@ func createPayload(ctx context.Context, evt *events.Message) (map[string]interfa
 	}
 
 	if videoMedia := evt.Message.GetVideoMessage(); videoMedia != nil {
-		path, err := ExtractMedia(ctx, config.PathMedia, videoMedia)
+		path, err := utils.ExtractMedia(ctx, cli, config.PathMedia, videoMedia)
 		if err != nil {
 			logrus.Errorf("Failed to download video from %s: %v", evt.Info.SourceString(), err)
 			return nil, pkgError.WebhookError(fmt.Sprintf("Failed to download video: %v", err))
@@ -204,7 +209,7 @@ func createPayload(ctx context.Context, evt *events.Message) (map[string]interfa
 	return body, nil
 }
 
-func submitWebhook(payload map[string]interface{}, url string) error {
+func submitWebhook(payload map[string]any, url string) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	postBody, err := json.Marshal(payload)
@@ -218,7 +223,7 @@ func submitWebhook(payload map[string]interface{}, url string) error {
 	}
 
 	secretKey := []byte(config.WhatsappWebhookSecret)
-	signature, err := getMessageDigestOrSignature(postBody, secretKey)
+	signature, err := utils.GetMessageDigestOrSignature(postBody, secretKey)
 	if err != nil {
 		return pkgError.WebhookError(fmt.Sprintf("error when create signature %v", err))
 	}
@@ -241,4 +246,54 @@ func submitWebhook(payload map[string]interface{}, url string) error {
 	}
 
 	return pkgError.WebhookError(fmt.Sprintf("error when submit webhook after %d attempts: %v", attempt, err))
+}
+
+// forwardDeleteToWebhook sends a delete event to webhook
+func forwardDeleteToWebhook(ctx context.Context, evt *events.DeleteForMe, message *domainChatStorage.Message) error {
+	logrus.Info("Forwarding delete event to webhook:", config.WhatsappWebhook)
+	payload, err := createDeletePayload(ctx, evt, message)
+	if err != nil {
+		return err
+	}
+
+	for _, url := range config.WhatsappWebhook {
+		if err = submitWebhook(payload, url); err != nil {
+			return err
+		}
+	}
+
+	logrus.Info("Delete event forwarded to webhook")
+	return nil
+}
+
+// createDeletePayload creates a webhook payload for delete events
+func createDeletePayload(_ context.Context, evt *events.DeleteForMe, message *domainChatStorage.Message) (map[string]any, error) {
+	body := make(map[string]any)
+
+	// Basic delete event information
+	body["action"] = "message_deleted_for_me"
+	body["deleted_message_id"] = evt.MessageID
+	body["sender_id"] = evt.SenderJID.User
+	body["timestamp"] = time.Now().Format(time.RFC3339)
+
+	// Include original message information if available
+	if message != nil {
+		body["chat_id"] = message.ChatJID
+		body["original_content"] = message.Content
+		body["original_sender"] = message.Sender
+		body["original_timestamp"] = message.Timestamp.Format(time.RFC3339)
+		body["was_from_me"] = message.IsFromMe
+
+		if message.MediaType != "" {
+			body["original_media_type"] = message.MediaType
+			body["original_filename"] = message.Filename
+		}
+	}
+
+	// Parse sender JID for proper formatting
+	if evt.SenderJID.Server != "" {
+		body["from"] = evt.SenderJID.String()
+	}
+
+	return body, nil
 }

@@ -5,26 +5,26 @@ import (
 )
 
 var (
-	AppVersion               = "v6.1.2"
-	AppPort                  = "3000"
-	AppDebug                 = false
-	AppOs                    = "Nebula Zap"
-	AppPlatform              = waCompanionReg.DeviceProps_PlatformType(1)
-	AppBasicAuthCredential   []string
-	AppChatFlushIntervalDays = 7 // Number of days before flushing chat.csv
+	AppVersion             = "v7.2.1"
+	AppPort                = "3000"
+	AppDebug               = false
+	AppOs                  = "AldinoKemal"
+	AppPlatform            = waCompanionReg.DeviceProps_PlatformType(1)
+	AppBasicAuthCredential []string
 
 	McpPort = "8080"
 	McpHost = "localhost"
 
-	PathQrCode      = "statics/qrcode"
-	PathSendItems   = "statics/senditems"
-	PathMedia       = "statics/media"
-	PathStorages    = "storages"
-	PathChatStorage = "storages/chat.csv"
+	PathQrCode    = "statics/qrcode"
+	PathSendItems = "statics/senditems"
+	PathMedia     = "statics/media"
+	PathStorages  = "storages"
 
-	DBURI = "file:storages/whatsapp.db?_foreign_keys=on"
+	DBURI     = "file:storages/whatsapp.db?_foreign_keys=on"
+	DBKeysURI = ""
 
 	WhatsappAutoReplyMessage       string
+	WhatsappAutoMarkRead           = false // Auto-mark incoming messages as read
 	WhatsappWebhook                []string
 	WhatsappWebhookSecret                = "secret"
 	WhatsappLogLevel                     = "ERROR"
@@ -35,5 +35,8 @@ var (
 	WhatsappTypeUser                     = "@s.whatsapp.net"
 	WhatsappTypeGroup                    = "@g.us"
 	WhatsappAccountValidation            = true
-	WhatsappChatStorage                  = true
+
+	ChatStorageURI               = "file:storages/chatstorage.db"
+	ChatStorageEnableForeignKeys = true
+	ChatStorageEnableWAL         = true
 )
