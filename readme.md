@@ -22,7 +22,8 @@ ___
 Download:
 
 - [Release](https://github.com/aldinokemal/go-whatsapp-web-multidevice/releases/latest)
-- [Docker Image](https://hub.docker.com/r/aldinokemal2104/go-whatsapp-web-multidevice/tags)
+- [Docker Hub](https://hub.docker.com/r/aldinokemal2104/go-whatsapp-web-multidevice/tags)
+- [GitHub Container Registry](https://github.com/aldinokemal/go-whatsapp-web-multidevice/pkgs/container/go-whatsapp-web-multidevice)
 
 ## Support n8n package (n8n.io)
 
@@ -37,8 +38,9 @@ Download:
   - For MCP mode, you need to run `<binary> mcp`
     - for example: `./whatsapp mcp`
 - `v7`
-  - Starting version 7.x we are using goreleaser to build the binary, so you can download the binary from [release](https://github.com/aldinokemal/go-whatsapp-web-multidevice/releases/latest)
-  
+  - Starting version 7.x we are using goreleaser to build the binary, so you can download the binary
+      from [release](https://github.com/aldinokemal/go-whatsapp-web-multidevice/releases/latest)
+
 ## Feature
 
 - Send WhatsApp message via http API, [docs/openapi.yml](./docs/openapi.yaml) for more details
@@ -47,6 +49,10 @@ Download:
   - `@phoneNumber`
   - example: `Hello @628974812XXXX, @628974812XXXX`
 - Post Whatsapp Status
+- **Send Stickers** - Automatically converts images to WebP sticker format
+  - Supports JPG, JPEG, PNG, WebP, and GIF formats
+  - Automatic resizing to 512x512 pixels
+  - Preserves transparency for PNG images
 - Compress image before send
 - Compress video before send
 - Change OS name become your app (it's the device name when connect via mobile)
@@ -54,6 +60,8 @@ Download:
 - Basic Auth (able to add multi credentials)
   - `--basic-auth=kemal:secret,toni:password,userName:secretPassword`, or you can simplify
   - `-b=kemal:secret,toni:password,userName:secretPassword`
+- Subpath deployment support
+  - `--base-path="/gowa"` (allows deployment under a specific path like `/gowa/sub/path`)
 - Customizable port and debug mode
   - `--port 8000`
   - `--debug true`
@@ -71,7 +79,8 @@ Download:
   You may modify this by using the option below:
   - `--webhook-secret="secret"`
 - **Webhook Payload Documentation**
-  For detailed webhook payload schemas, security implementation, and integration examples, see [Webhook Payload Documentation](./docs/webhook-payload.md)
+  For detailed webhook payload schemas, security implementation, and integration examples,
+  see [Webhook Payload Documentation](./docs/webhook-payload.md)
 
 ## Configuration
 
@@ -105,6 +114,7 @@ To use environment variables:
 | `APP_DEBUG`                   | Enable debug logging                        | `false`                                      | `APP_DEBUG=true`                            |
 | `APP_OS`                      | OS name (device name in WhatsApp)           | `Chrome`                                     | `APP_OS=MyApp`                              |
 | `APP_BASIC_AUTH`              | Basic authentication credentials            | -                                            | `APP_BASIC_AUTH=user1:pass1,user2:pass2`    |
+| `APP_BASE_PATH`               | Base path for subpath deployment            | -                                            | `APP_BASE_PATH=/gowa`                       |
 | `DB_URI`                      | Database connection URI                     | `file:storages/whatsapp.db?_foreign_keys=on` | `DB_URI=postgres://user:pass@host/db`       |
 | `WHATSAPP_AUTO_REPLY`         | Auto-reply message                          | -                                            | `WHATSAPP_AUTO_REPLY="Auto reply message"`  |
 | `WHATSAPP_AUTO_MARK_READ`     | Auto-mark incoming messages as read         | `false`                                      | `WHATSAPP_AUTO_MARK_READ=true`              |
@@ -192,10 +202,47 @@ standardized protocol.
 
 #### Available MCP Tools
 
-- `whatsapp_send_text` - Send text messages
-- `whatsapp_send_contact` - Send contact cards
-- `whatsapp_send_link` - Send links with captions
-- `whatsapp_send_location` - Send location coordinates
+The WhatsApp MCP server provides comprehensive tools for AI agents to interact with WhatsApp through a standardized protocol. Below is the complete list of available tools:
+
+##### **📱 Connection Management**
+
+- `whatsapp_connection_status` - Check whether the WhatsApp client is connected and logged in
+- `whatsapp_login_qr` - Initiate QR code based login flow with image output
+- `whatsapp_login_with_code` - Generate pairing code for multi-device login using phone number
+- `whatsapp_logout` - Sign out the current WhatsApp session
+- `whatsapp_reconnect` - Attempt to reconnect to WhatsApp using stored session
+
+##### **💬 Messaging & Communication**
+
+- `whatsapp_send_text` - Send text messages with reply and forwarding support
+- `whatsapp_send_contact` - Send contact cards with name and phone number
+- `whatsapp_send_link` - Send links with custom captions
+- `whatsapp_send_location` - Send location coordinates (latitude/longitude)
+- `whatsapp_send_image` - Send images with captions, compression, and view-once options
+- `whatsapp_send_sticker` - Send stickers with automatic WebP conversion (supports JPG/PNG/GIF)
+
+##### **📋 Chat & Contact Management**
+
+- `whatsapp_list_contacts` - Retrieve all contacts in your WhatsApp account
+- `whatsapp_list_chats` - Get recent chats with pagination and search filters
+- `whatsapp_get_chat_messages` - Fetch messages from specific chats with time/media filtering
+- `whatsapp_download_message_media` - Download images/videos from messages
+
+##### **👥 Group Management**
+
+- `whatsapp_group_create` - Create new groups with optional initial participants
+- `whatsapp_group_join_via_link` - Join groups using invite links
+- `whatsapp_group_leave` - Leave groups by group ID
+- `whatsapp_group_participants` - List all participants in a group
+- `whatsapp_group_manage_participants` - Add, remove, promote, or demote group members
+- `whatsapp_group_invite_link` - Get or reset group invite links
+- `whatsapp_group_info` - Get detailed group information
+- `whatsapp_group_set_name` - Update group display name
+- `whatsapp_group_set_topic` - Update group description/topic
+- `whatsapp_group_set_locked` - Toggle admin-only group info editing
+- `whatsapp_group_set_announce` - Toggle announcement-only mode
+- `whatsapp_group_join_requests` - List pending join requests
+- `whatsapp_group_manage_join_requests` - Approve or reject join requests
 
 #### MCP Endpoints
 
@@ -220,13 +267,23 @@ For AI tools that support MCP with SSE (like Cursor), add this configuration:
 
 ### Production Mode REST (docker)
 
+Using Docker Hub:
+
 ```bash
 docker run --detach --publish=3000:3000 --name=whatsapp --restart=always --volume=$(docker volume create --name=whatsapp):/app/storages aldinokemal2104/go-whatsapp-web-multidevice rest --autoreply="Dont't reply this message please"
+```
+
+Using GitHub Container Registry:
+
+```bash
+docker run --detach --publish=3000:3000 --name=whatsapp --restart=always --volume=$(docker volume create --name=whatsapp):/app/storages ghcr.io/aldinokemal/go-whatsapp-web-multidevice rest --autoreply="Dont't reply this message please"
 ```
 
 ### Production Mode REST (docker compose)
 
 create `docker-compose.yml` file with the following configuration:
+
+Using Docker Hub:
 
 ```yml
 services:
@@ -250,12 +307,59 @@ volumes:
   whatsapp:
 ```
 
-or with env file
+Using GitHub Container Registry:
+
+```yml
+services:
+  whatsapp:
+    image: ghcr.io/aldinokemal/go-whatsapp-web-multidevice
+    container_name: whatsapp
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - whatsapp:/app/storages
+    command:
+      - rest
+      - --basic-auth=admin:admin
+      - --port=3000
+      - --debug=true
+      - --os=Chrome
+      - --account-validation=false
+
+volumes:
+  whatsapp:
+```
+
+or with env file (Docker Hub):
 
 ```yml
 services:
   whatsapp:
     image: aldinokemal2104/go-whatsapp-web-multidevice
+    container_name: whatsapp
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - whatsapp:/app/storages
+    environment:
+      - APP_BASIC_AUTH=admin:admin
+      - APP_PORT=3000
+      - APP_DEBUG=true
+      - APP_OS=Chrome
+      - APP_ACCOUNT_VALIDATION=false
+
+volumes:
+  whatsapp:
+```
+
+or with env file (GitHub Container Registry):
+
+```yml
+services:
+  whatsapp:
+    image: ghcr.io/aldinokemal/go-whatsapp-web-multidevice
     container_name: whatsapp
     restart: always
     ports:
@@ -317,6 +421,7 @@ You can fork or edit this source code !
 | ✅       | Send Audio                             | POST   | /send/audio                         |
 | ✅       | Send File                              | POST   | /send/file                          |
 | ✅       | Send Video                             | POST   | /send/video                         |
+| ✅       | Send Sticker                           | POST   | /send/sticker                       |
 | ✅       | Send Contact                           | POST   | /send/contact                       |
 | ✅       | Send Link                              | POST   | /send/link                          |
 | ✅       | Send Location                          | POST   | /send/location                      |
@@ -335,10 +440,12 @@ You can fork or edit this source code !
 | ✅       | Group Info                             | GET    | /group/info                         |
 | ✅       | Leave Group                            | POST   | /group/leave                        |
 | ✅       | Create Group                           | POST   | /group                              |
+| ✅       | List Participants in Group             | GET    | /group/participants                 |
 | ✅       | Add Participants in Group              | POST   | /group/participants                 |
 | ✅       | Remove Participant in Group            | POST   | /group/participants/remove          |
 | ✅       | Promote Participant in Group           | POST   | /group/participants/promote         |
 | ✅       | Demote Participant in Group            | POST   | /group/participants/demote          |
+| ✅       | Export Group Participants (CSV)        | GET    | /group/participants/export          |
 | ✅       | List Requested Participants in Group   | GET    | /group/participant-requests         |
 | ✅       | Approve Requested Participant in Group | POST   | /group/participant-requests/approve |
 | ✅       | Reject Requested Participant in Group  | POST   | /group/participant-requests/reject  |
@@ -347,6 +454,7 @@ You can fork or edit this source code !
 | ✅       | Set Group Locked                       | POST   | /group/locked                       |
 | ✅       | Set Group Announce                     | POST   | /group/announce                     |
 | ✅       | Set Group Topic                        | POST   | /group/topic                        |
+| ✅       | Get Group Invite Link                  | GET    | /group/invite-link                  |
 | ✅       | Unfollow Newsletter                    | POST   | /newsletter/unfollow                |
 | ✅       | Get Chat List                          | GET    | /chats                              |
 | ✅       | Get Chat Messages                      | GET    | /chat/:chat_jid/messages            |
@@ -380,6 +488,7 @@ You can fork or edit this source code !
 | Send Image           | ![Send Image](./gallery/send-image.png)                       |
 | Send File            | ![Send File](./gallery/send-file.png)                         |
 | Send Video           | ![Send Video](./gallery/send-video.png)                       |
+| Send Sticker         | ![Send Sticker](./gallery/send-sticker.png)                   |
 | Send Contact         | ![Send Contact](./gallery/send-contact.png)                   |
 | Send Location        | ![Send Location](./gallery/send-location.png)                 |
 | Send Audio           | ![Send Audio](./gallery/send-audio.png)                       |
@@ -389,7 +498,7 @@ You can fork or edit this source code !
 | My Group             | ![My Group](./gallery/group-list.png)                         |
 | Group Info From Link | ![Group Info From Link](./gallery/group-info-from-link.png)   |
 | Create Group         | ![Create Group](./gallery/group-create.png)                   |
-| Join Group with LInk | ![Join Group with Link](./gallery/group-join-link.png)        |
+| Join Group with Link | ![Join Group with Link](./gallery/group-join-link.png)        |
 | Manage Participant   | ![Manage Participant](./gallery/group-manage-participant.png) |
 | My Newsletter        | ![My Newsletter](./gallery/newsletter-list.png)               |
 | My Contacts          | ![My Contacts](./gallery/contact-list.png)                    |

@@ -29,6 +29,26 @@ func validateDuration(dur *int) error {
 	return nil
 }
 
+// validatePhoneNumber validates that the phone number is in international format (not starting with 0)
+func validatePhoneNumber(phone string) error {
+	if phone == "" {
+		return pkgError.ValidationError("phone number cannot be empty")
+	}
+
+	// Remove + prefix if present for validation
+	phoneNumber := phone
+	if len(phoneNumber) > 0 && phoneNumber[0] == '+' {
+		phoneNumber = phoneNumber[1:]
+	}
+
+	// Check if phone number starts with 0 (indicating local format)
+	if len(phoneNumber) > 0 && phoneNumber[0] == '0' {
+		return pkgError.ValidationError("phone number must be in international format (should not start with 0). For Indonesian numbers, use 62xxx format instead of 08xxx")
+	}
+
+	return nil
+}
+
 func ValidateSendMessage(ctx context.Context, request domainSend.MessageRequest) error {
 	err := validation.ValidateStructWithContext(ctx, &request,
 		validation.Field(&request.Phone, validation.Required),
@@ -37,6 +57,11 @@ func ValidateSendMessage(ctx context.Context, request domainSend.MessageRequest)
 
 	if err != nil {
 		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
 	}
 
 	// Custom validation for optional Duration
@@ -53,6 +78,11 @@ func ValidateSendImage(ctx context.Context, request domainSend.ImageRequest) err
 
 	if err != nil {
 		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
 	}
 
 	if request.Image == nil && (request.ImageURL == nil || *request.ImageURL == "") {
@@ -90,6 +120,61 @@ func ValidateSendImage(ctx context.Context, request domainSend.ImageRequest) err
 	return nil
 }
 
+func ValidateSendSticker(ctx context.Context, request domainSend.StickerRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.Phone, validation.Required),
+	)
+
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
+	}
+
+	// Either Sticker or StickerURL must be provided
+	if request.Sticker == nil && (request.StickerURL == nil || *request.StickerURL == "") {
+		return pkgError.ValidationError("either Sticker or StickerURL must be provided")
+	}
+
+	// Both cannot be provided at the same time
+	if request.Sticker != nil && request.StickerURL != nil && *request.StickerURL != "" {
+		return pkgError.ValidationError("cannot provide both Sticker file and StickerURL")
+	}
+
+	// Validate file type if sticker file is provided
+	if request.Sticker != nil {
+		availableMimes := map[string]bool{
+			"image/jpeg": true,
+			"image/jpg":  true,
+			"image/png":  true,
+			"image/webp": true, // Also accept WebP directly
+			"image/gif":  true, // Support GIF for animated stickers
+		}
+
+		if !availableMimes[request.Sticker.Header.Get("Content-Type")] {
+			return pkgError.ValidationError("your sticker is not allowed. please use jpg/jpeg/png/webp/gif")
+		}
+	}
+
+	// Validate URL if provided
+	if request.StickerURL != nil && *request.StickerURL != "" {
+		err := validation.Validate(*request.StickerURL, is.URL)
+		if err != nil {
+			return pkgError.ValidationError("StickerURL must be a valid URL")
+		}
+	}
+
+	// Validate duration
+	if err := validateDuration(request.Duration); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func ValidateSendFile(ctx context.Context, request domainSend.FileRequest) error {
 	err := validation.ValidateStructWithContext(ctx, &request,
 		validation.Field(&request.Phone, validation.Required),
@@ -98,6 +183,11 @@ func ValidateSendFile(ctx context.Context, request domainSend.FileRequest) error
 
 	if err != nil {
 		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
 	}
 
 	if request.File.Size > config.WhatsappSettingMaxFileSize { // 10MB
@@ -120,6 +210,11 @@ func ValidateSendVideo(ctx context.Context, request domainSend.VideoRequest) err
 
 	if err != nil {
 		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
 	}
 
 	// Ensure at least one of Video or VideoURL is provided
@@ -175,6 +270,16 @@ func ValidateSendContact(ctx context.Context, request domainSend.ContactRequest)
 		return pkgError.ValidationError(err.Error())
 	}
 
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
+	}
+
+	// Custom validation for contact phone number format
+	if err := validatePhoneNumber(request.ContactPhone); err != nil {
+		return pkgError.ValidationError("contact " + err.Error())
+	}
+
 	if err := validateDuration(request.Duration); err != nil {
 		return err
 	}
@@ -191,6 +296,11 @@ func ValidateSendLink(ctx context.Context, request domainSend.LinkRequest) error
 
 	if err != nil {
 		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
 	}
 
 	if err := validateDuration(request.Duration); err != nil {
@@ -211,6 +321,11 @@ func ValidateSendLocation(ctx context.Context, request domainSend.LocationReques
 		return pkgError.ValidationError(err.Error())
 	}
 
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
+	}
+
 	if err := validateDuration(request.Duration); err != nil {
 		return err
 	}
@@ -225,6 +340,11 @@ func ValidateSendAudio(ctx context.Context, request domainSend.AudioRequest) err
 
 	if err != nil {
 		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
 	}
 
 	// Ensure at least one of Audio or AudioURL is provided
@@ -309,6 +429,11 @@ func ValidateSendPoll(ctx context.Context, request domainSend.PollRequest) error
 		return pkgError.ValidationError(err.Error())
 	}
 
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
+	}
+
 	if err := validateDuration(request.Duration); err != nil {
 		return err
 	}
@@ -345,6 +470,11 @@ func ValidateSendChatPresence(ctx context.Context, request domainSend.ChatPresen
 
 	if err != nil {
 		return pkgError.ValidationError(err.Error())
+	}
+
+	// Custom validation for phone number format
+	if err := validatePhoneNumber(request.Phone); err != nil {
+		return err
 	}
 
 	return nil

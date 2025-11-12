@@ -5,12 +5,13 @@ import (
 )
 
 var (
-	AppVersion             = "v7.2.1"
+	AppVersion             = "v7.8.2"
 	AppPort                = "3000"
 	AppDebug               = false
 	AppOs                  = "AldinoKemal"
 	AppPlatform            = waCompanionReg.DeviceProps_PlatformType(1)
 	AppBasicAuthCredential []string
+	AppBasePath            = ""
 
 	McpPort = "8080"
 	McpHost = "localhost"

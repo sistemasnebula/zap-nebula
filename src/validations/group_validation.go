@@ -73,6 +73,18 @@ func ValidateParticipant(ctx context.Context, request domainGroup.ParticipantReq
 	return nil
 }
 
+func ValidateGetGroupParticipants(ctx context.Context, request domainGroup.GetGroupParticipantsRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.GroupID, validation.Required),
+	)
+
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+
+	return nil
+}
+
 func ValidateGetGroupRequestParticipants(ctx context.Context, request domainGroup.GetGroupRequestParticipantsRequest) error {
 	err := validation.ValidateStructWithContext(ctx, &request,
 		validation.Field(&request.GroupID, validation.Required),
@@ -194,6 +206,18 @@ func ValidateSetGroupTopic(ctx context.Context, request domainGroup.SetGroupTopi
 }
 
 func ValidateGroupInfo(ctx context.Context, request domainGroup.GroupInfoRequest) error {
+	err := validation.ValidateStructWithContext(ctx, &request,
+		validation.Field(&request.GroupID, validation.Required),
+	)
+
+	if err != nil {
+		return pkgError.ValidationError(err.Error())
+	}
+
+	return nil
+}
+
+func ValidateGetGroupInviteLink(ctx context.Context, request domainGroup.GetGroupInviteLinkRequest) error {
 	err := validation.ValidateStructWithContext(ctx, &request,
 		validation.Field(&request.GroupID, validation.Required),
 	)

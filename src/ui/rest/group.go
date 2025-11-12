@@ -1,7 +1,10 @@
 package rest
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -15,13 +18,15 @@ type Group struct {
 	Service domainGroup.IGroupUsecase
 }
 
-func InitRestGroup(app *fiber.App, service domainGroup.IGroupUsecase) Group {
+func InitRestGroup(app fiber.Router, service domainGroup.IGroupUsecase) Group {
 	rest := Group{Service: service}
 	app.Post("/group", rest.CreateGroup)
 	app.Post("/group/join-with-link", rest.JoinGroupWithLink)
 	app.Get("/group/info-from-link", rest.GetGroupInfoFromLink)
 	app.Get("/group/info", rest.GroupInfo)
 	app.Post("/group/leave", rest.LeaveGroup)
+	app.Get("/group/participants", rest.ListParticipants)
+	app.Get("/group/participants/export", rest.ExportParticipants)
 	app.Post("/group/participants", rest.AddParticipants)
 	app.Post("/group/participants/remove", rest.DeleteParticipants)
 	app.Post("/group/participants/promote", rest.PromoteParticipants)
@@ -34,6 +39,7 @@ func InitRestGroup(app *fiber.App, service domainGroup.IGroupUsecase) Group {
 	app.Post("/group/locked", rest.SetGroupLocked)
 	app.Post("/group/announce", rest.SetGroupAnnounce)
 	app.Post("/group/topic", rest.SetGroupTopic)
+	app.Get("/group/invite-link", rest.GetGroupInviteLink)
 	return rest
 }
 
@@ -105,6 +111,86 @@ func (controller *Group) CreateGroup(c *fiber.Ctx) error {
 		},
 	})
 }
+
+func (controller *Group) ListParticipants(c *fiber.Ctx) error {
+	var request domainGroup.GetGroupParticipantsRequest
+	err := c.QueryParser(&request)
+	utils.PanicIfNeeded(err)
+
+	if request.GroupID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.ResponseData{
+			Status:  400,
+			Code:    "INVALID_GROUP_ID",
+			Message: "Group ID cannot be empty",
+		})
+	}
+
+	utils.SanitizePhone(&request.GroupID)
+
+	result, err := controller.Service.GetGroupParticipants(c.UserContext(), request)
+	utils.PanicIfNeeded(err)
+
+	return c.JSON(utils.ResponseData{
+		Status:  200,
+		Code:    "SUCCESS",
+		Message: "Success getting group participants",
+		Results: result,
+	})
+}
+
+func (controller *Group) ExportParticipants(c *fiber.Ctx) error {
+	var request domainGroup.GetGroupParticipantsRequest
+	err := c.QueryParser(&request)
+	utils.PanicIfNeeded(err)
+
+	if request.GroupID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.ResponseData{
+			Status:  400,
+			Code:    "INVALID_GROUP_ID",
+			Message: "Group ID cannot be empty",
+		})
+	}
+
+	utils.SanitizePhone(&request.GroupID)
+
+	result, err := controller.Service.GetGroupParticipants(c.UserContext(), request)
+	utils.PanicIfNeeded(err)
+
+	var buffer bytes.Buffer
+	writer := csv.NewWriter(&buffer)
+
+	utils.PanicIfNeeded(writer.Write([]string{"participant_jid", "phone_number", "lid", "display_name", "role"}))
+
+	for _, participant := range result.Participants {
+		role := "member"
+		if participant.IsSuperAdmin {
+			role = "super_admin"
+		} else if participant.IsAdmin {
+			role = "admin"
+		}
+
+		record := []string{
+			participant.JID,
+			participant.PhoneNumber,
+			participant.LID,
+			participant.DisplayName,
+			role,
+		}
+
+		utils.PanicIfNeeded(writer.Write(record))
+	}
+
+	writer.Flush()
+	utils.PanicIfNeeded(writer.Error())
+
+	fileName := fmt.Sprintf("group-%s-participants.csv", strings.ReplaceAll(result.GroupID, "@", "_"))
+
+	c.Type("text/csv; charset=utf-8")
+	c.Attachment(fileName)
+
+	return c.Send(buffer.Bytes())
+}
+
 func (controller *Group) AddParticipants(c *fiber.Ctx) error {
 	return controller.manageParticipants(c, whatsmeow.ParticipantChangeAdd, "Success add participants")
 }
@@ -337,5 +423,23 @@ func (controller *Group) GroupInfo(c *fiber.Ctx) error {
 		Code:    "SUCCESS",
 		Message: "Success get group info",
 		Results: response.Data,
+	})
+}
+
+func (controller *Group) GetGroupInviteLink(c *fiber.Ctx) error {
+	var request domainGroup.GetGroupInviteLinkRequest
+	err := c.QueryParser(&request)
+	utils.PanicIfNeeded(err)
+
+	utils.SanitizePhone(&request.GroupID)
+
+	response, err := controller.Service.GetGroupInviteLink(c.UserContext(), request)
+	utils.PanicIfNeeded(err)
+
+	return c.JSON(utils.ResponseData{
+		Status:  200,
+		Code:    "SUCCESS",
+		Message: "Success get group invite link",
+		Results: response,
 	})
 }

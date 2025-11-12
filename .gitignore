@@ -10,4 +10,5 @@ src/pkged.go
 storages
 .env
 bin
-dist
+.playwright-mcp
+.cursor/mcp.json
