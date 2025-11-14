@@ -17,6 +17,9 @@ func SetAutoConnectAfterBooting(service domainApp.IAppUsecase) {
 func SetAutoReconnectChecking(cli *whatsmeow.Client) {
 	// Run every 5 minutes to check if the connection is still alive, if not, reconnect
 	go func() {
+		if cli == nil {
+			return
+		}
 		for {
 			time.Sleep(5 * time.Minute)
 			if !cli.IsConnected() {
