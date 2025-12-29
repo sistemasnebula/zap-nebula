@@ -1,0 +1,110 @@
+# Exemplo de configuração Docker Compose para PRODUÇÃO
+# 
+# IMPORTANTE: 
+# - Altere as senhas padrão antes de usar em produção
+# - Use variáveis de ambiente ou secrets para credenciais sensíveis
+# - Configure firewall e proxy reverso com SSL/TLS
+
+services:
+  whatsapp:
+    # Usar imagem do Docker Hub após build e push
+    image: seu-usuario/go-whatsapp-web-multidevice:latest
+    # Ou build local:
+    # build:
+    #   context: .
+    #   dockerfile: ./docker/golang.Dockerfile
+
+    container_name: whatsapp-prod
+    restart: always
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+
+    ports:
+      - "3000:3000"
+      # Para múltiplas instâncias, use portas diferentes:
+      # - "3001:3000"  # Instância 2
+      # - "3002:3000"  # Instância 3
+
+    volumes:
+      - whatsapp-data:/app/storages
+      # NÃO monte ./src/statics em produção (usa volume interno)
+
+    environment:
+      # 🔒 SEGURANÇA: Configure múltiplos usuários separados por vírgula
+      # Formato: usuario1:senha1,usuario2:senha2
+      APP_BASIC_AUTH: "admin:senhaSegura123,operador:outraSenha456"
+      
+      # Configurações da aplicação
+      APP_PORT: "3000"
+      APP_HOST: "0.0.0.0"
+      APP_DEBUG: "false"
+      APP_OS: "NS-Zap-Production"
+      
+      # Base path se usar proxy reverso (ex: /whatsapp)
+      # APP_BASE_PATH: "/whatsapp"
+      
+      # IPs de proxy confiáveis (se usar proxy reverso)
+      # APP_TRUSTED_PROXIES: "127.0.0.1,10.0.0.0/8"
+      
+      # Configurações WhatsApp
+      WHATSAPP_ACCOUNT_VALIDATION: "false"
+      WHATSAPP_AUTO_DOWNLOAD_MEDIA: "true"
+      WHATSAPP_AUTO_MARK_READ: "false"
+      WHATSAPP_WEBHOOK: "https://seu-webhook.com/handler"
+      WHATSAPP_WEBHOOK_SECRET: "seu-secret-aqui"
+      WHATSAPP_WEBHOOK_INSECURE_SKIP_VERIFY: "false"
+      WHATSAPP_LOG_LEVEL: "ERROR"
+
+      # Database
+      DB_URI: "file:storages/whatsapp.db?_foreign_keys=on"
+      # Para PostgreSQL:
+      # DB_URI: "postgres://usuario:senha@postgres:5432/whatsapp?sslmode=disable"
+
+    command:
+      - rest
+      - --port=3000
+      - --debug=false
+      # Basic auth também pode ser passado via command (menos seguro)
+      # - --basic-auth=admin:senhaSegura123
+      - --os=NS-Zap-Production
+      - --account-validation=false
+      - --webhook=${WHATSAPP_WEBHOOK}
+
+volumes:
+  whatsapp-data:
+    # Para produção, considere usar volumes nomeados gerenciados
+    # ou volumes externos para backup facilitado
+
+# Exemplo com múltiplas instâncias:
+#
+# services:
+#   whatsapp-instance-1:
+#     image: seu-usuario/go-whatsapp-web-multidevice:latest
+#     container_name: whatsapp-prod-1
+#     environment:
+#       APP_BASIC_AUTH: "admin1:senha1"
+#       APP_PORT: "3000"
+#     ports:
+#       - "3000:3000"
+#     volumes:
+#       - whatsapp-1:/app/storages
+#
+#   whatsapp-instance-2:
+#     image: seu-usuario/go-whatsapp-web-multidevice:latest
+#     container_name: whatsapp-prod-2
+#     environment:
+#       APP_BASIC_AUTH: "admin2:senha2"
+#       APP_PORT: "3000"
+#     ports:
+#       - "3001:3000"
+#     volumes:
+#       - whatsapp-2:/app/storages
+#
+# volumes:
+#   whatsapp-1:
+#   whatsapp-2:
+
