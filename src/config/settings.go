@@ -5,8 +5,9 @@ import (
 )
 
 var (
-	AppVersion             = "v7.9.0"
+	AppVersion             = "v8.1.0"
 	AppPort                = "3000"
+	AppHost                = "0.0.0.0"
 	AppDebug               = false
 	AppOs                  = "NS-zap"
 	AppPlatform            = waCompanionReg.DeviceProps_PlatformType(1)
@@ -25,19 +26,21 @@ var (
 	DBURI     = "file:storages/whatsapp.db?_foreign_keys=on"
 	DBKeysURI = ""
 
-	WhatsappAutoReplyMessage       string
-	WhatsappAutoMarkRead           = false // Auto-mark incoming messages as read
-	WhatsappAutoDownloadMedia      = true  // Auto-download media from incoming messages
-	WhatsappWebhook                []string
-	WhatsappWebhookSecret                = "secret"
-	WhatsappLogLevel                     = "ERROR"
-	WhatsappSettingMaxImageSize    int64 = 20000000  // 20MB
-	WhatsappSettingMaxFileSize     int64 = 50000000  // 50MB
-	WhatsappSettingMaxVideoSize    int64 = 100000000 // 100MB
-	WhatsappSettingMaxDownloadSize int64 = 500000000 // 500MB
-	WhatsappTypeUser                     = "@s.whatsapp.net"
-	WhatsappTypeGroup                    = "@g.us"
-	WhatsappAccountValidation            = true
+	WhatsappAutoReplyMessage          string
+	WhatsappAutoMarkRead              = false // Auto-mark incoming messages as read
+	WhatsappAutoDownloadMedia         = true  // Auto-download media from incoming messages
+	WhatsappWebhook                   []string
+	WhatsappWebhookSecret             = "secret"
+	WhatsappWebhookInsecureSkipVerify = false  // Skip TLS certificate verification for webhooks (insecure)
+	WhatsappWebhookEvents             []string // Whitelist of events to forward to webhook (empty = all events)
+	WhatsappLogLevel                           = "ERROR"
+	WhatsappSettingMaxImageSize       int64    = 20000000  // 20MB
+	WhatsappSettingMaxFileSize        int64    = 50000000  // 50MB
+	WhatsappSettingMaxVideoSize       int64    = 100000000 // 100MB
+	WhatsappSettingMaxDownloadSize    int64    = 500000000 // 500MB
+	WhatsappTypeUser                           = "@s.whatsapp.net"
+	WhatsappTypeGroup                          = "@g.us"
+	WhatsappAccountValidation                  = true
 
 	ChatStorageURI               = "file:storages/chatstorage.db"
 	ChatStorageEnableForeignKeys = true
