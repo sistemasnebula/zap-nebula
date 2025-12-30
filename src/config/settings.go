@@ -22,8 +22,9 @@ var (
 	PathSendItems = "statics/senditems"
 	PathMedia     = "statics/media"
 	PathStorages  = "storages"
+	PathDatabase  = "database"
 
-	DBURI     = "file:storages/whatsapp.db?_foreign_keys=on"
+	DBURI     = "file:database/whatsapp.db?_foreign_keys=on"
 	DBKeysURI = ""
 
 	WhatsappAutoReplyMessage          string
@@ -42,7 +43,7 @@ var (
 	WhatsappTypeGroup                          = "@g.us"
 	WhatsappAccountValidation                  = true
 
-	ChatStorageURI               = "file:storages/chatstorage.db"
+	ChatStorageURI               = "file:database/chatstorage.db"
 	ChatStorageEnableForeignKeys = true
 	ChatStorageEnableWAL         = true
 )

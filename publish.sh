@@ -70,14 +70,6 @@ build_image() {
     echo -e "\e[32mBuild concluído com sucesso!\e[0m"
 }
 
-# Função para tag da imagem
-tag_image() {
-    echo -e "\e[36mTagueando imagem com: $IMAGE_LATEST_TAG\e[0m"
-    
-    if ! docker tag "$IMAGE_TAG" "$IMAGE_LATEST_TAG"; then
-        handle_error "Falha ao criar tag da imagem"
-    fi
-}
 
 # Função para login no Docker Hub
 docker_login() {
@@ -94,18 +86,12 @@ push_images() {
     if ! docker push "$IMAGE_TAG"; then
         handle_error "Falha ao enviar imagem $IMAGE_TAG"
     fi
-    
-    echo -e "\e[37mEnviando imagem $IMAGE_LATEST_TAG\e[0m"
-    if ! docker push "$IMAGE_LATEST_TAG"; then
-        handle_error "Falha ao enviar imagem $IMAGE_LATEST_TAG"
-    fi
 }
 
 # Função para limpeza
 cleanup() {
-    echo -e "\e[37mRemovendo imagens locais...\e[0m"
+    echo -e "\e[37mRemovendo imagem local...\e[0m"
     docker rmi "$IMAGE_TAG" 2>/dev/null || true
-    docker rmi "$IMAGE_LATEST_TAG" 2>/dev/null || true
 }
 
 # Processamento de argumentos
@@ -133,10 +119,9 @@ done
 # Validação dos argumentos principais
 validate_args "$1" "$2"
 
-# Define as tags da imagem
+# Define a tag da imagem
 IMAGE_NAME="nebulasistemas/nebula-zap-api"
 IMAGE_TAG="$IMAGE_NAME:$AMBIENTE-$VERSAO"
-IMAGE_LATEST_TAG="$IMAGE_NAME:$AMBIENTE-latest"
 
 # Limpa o console
 clear
@@ -155,10 +140,7 @@ check_dependencies
 # Build da imagem
 build_image
 
-# Tag da imagem
-tag_image
-
-# Push das imagens (se habilitado)
+# Push da imagem (se habilitado)
 if [ "$NO_PUSH" = false ]; then
     docker_login
     push_images
