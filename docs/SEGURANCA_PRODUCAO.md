@@ -11,6 +11,8 @@ Este documento descreve os mecanismos de segurança implementados e como configu
 5. [Exemplos de Configuração](#exemplos-de-configuração)
 6. [Boas Práticas](#boas-práticas)
 
+> 💡 **Para integração com C# .NET e Node.js**, consulte o guia completo: [BASIC_AUTH_INTEGRACAO.md](./BASIC_AUTH_INTEGRACAO.md)
+
 ## 🔐 Mecanismos de Segurança
 
 ### 1. Basic Authentication (Autenticação Básica)

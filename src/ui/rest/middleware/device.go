@@ -14,8 +14,18 @@ const DeviceIDHeader = "X-Device-Id"
 // and injects it into the context. It falls back to the default/only device for single-device mode.
 func DeviceMiddleware(dm *whatsapp.DeviceManager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		path := strings.TrimSpace(c.Path())
+		
 		// Allow non-device-scoped public endpoints (e.g., landing page) to pass through.
-		if path := strings.TrimSpace(c.Path()); path == "/" || path == "" {
+		if path == "/" || path == "" {
+			return c.Next()
+		}
+		
+		// Allow static file routes to pass through (statics, components, assets)
+		// Check if path contains these segments (works with or without AppBasePath)
+		if strings.Contains(path, "/statics/") ||
+			strings.Contains(path, "/components/") ||
+			strings.Contains(path, "/assets/") {
 			return c.Next()
 		}
 

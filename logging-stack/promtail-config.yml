@@ -1,0 +1,87 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["app=whatsapp-api"]
+    
+    relabel_configs:
+      # Extrair nome do container
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container_name'
+        replacement: '${1}'
+      
+      # Extrair stream (stdout/stderr)
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      
+      # Extrair labels customizados do Docker
+      - source_labels: ['__meta_docker_container_label_loja']
+        target_label: 'loja'
+      
+      - source_labels: ['__meta_docker_container_label_loja_id']
+        target_label: 'loja_id'
+      
+      - source_labels: ['__meta_docker_container_label_app']
+        target_label: 'app'
+      
+      - source_labels: ['__meta_docker_container_label_environment']
+        target_label: 'environment'
+      
+      - source_labels: ['__meta_docker_container_label_version']
+        target_label: 'version'
+      
+      # Extrair ID do container
+      - source_labels: ['__meta_docker_container_id']
+        target_label: 'container_id'
+      
+      # Extrair imagem
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+    
+    pipeline_stages:
+      # Parse JSON do Docker
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            attrs: attrs
+            tag: attrs.tag
+      
+      # Extrair informações adicionais
+      - json:
+          expressions:
+            container_name: attrs.name
+            container_id: attrs.id
+            image: attrs.image
+          source: attrs
+      
+      # Adicionar labels
+      - labels:
+          stream:
+          container_name:
+          container_id:
+          image:
+      
+      # Formatar mensagem final
+      - output:
+          source: output
+      
+      # Adicionar timestamp se disponível
+      - timestamp:
+          source: time
+          format: RFC3339Nano
+
