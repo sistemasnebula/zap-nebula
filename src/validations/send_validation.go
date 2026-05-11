@@ -76,6 +76,18 @@ func ValidateSendMessage(ctx context.Context, request domainSend.MessageRequest)
 	if err := validateDuration(request.Duration); err != nil {
 		return err
 	}
+
+	// Validate mentions if provided
+	for _, mention := range request.Mentions {
+		// Skip validation for special @everyone keyword
+		if mention == "@everyone" {
+			continue
+		}
+		if err := validatePhoneNumber(mention); err != nil {
+			return pkgError.ValidationError(fmt.Sprintf("mention %s: phone number must be in international format", mention))
+		}
+	}
+
 	return nil
 }
 
@@ -186,7 +198,6 @@ func ValidateSendSticker(ctx context.Context, request domainSend.StickerRequest)
 func ValidateSendFile(ctx context.Context, request domainSend.FileRequest) error {
 	err := validation.ValidateStructWithContext(ctx, &request,
 		validation.Field(&request.Phone, validation.Required),
-		validation.Field(&request.File, validation.Required),
 	)
 
 	if err != nil {
@@ -198,9 +209,25 @@ func ValidateSendFile(ctx context.Context, request domainSend.FileRequest) error
 		return err
 	}
 
-	if request.File.Size > config.WhatsappSettingMaxFileSize { // 10MB
-		maxSizeString := humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize))
-		return pkgError.ValidationError(fmt.Sprintf("max file upload is %s, please upload in cloud and send via text if your file is higher than %s", maxSizeString, maxSizeString))
+	// Either File or FileURL must be provided
+	if request.File == nil && (request.FileURL == nil || *request.FileURL == "") {
+		return pkgError.ValidationError("either File or FileURL must be provided")
+	}
+
+	if request.File != nil {
+		if request.File.Size > config.WhatsappSettingMaxFileSize { // 10MB
+			maxSizeString := humanize.Bytes(uint64(config.WhatsappSettingMaxFileSize))
+			return pkgError.ValidationError(fmt.Sprintf("max file upload is %s, please upload in cloud and send via text if your file is higher than %s", maxSizeString, maxSizeString))
+		}
+	}
+
+	if request.FileURL != nil {
+		if *request.FileURL == "" {
+			return pkgError.ValidationError("FileURL cannot be empty")
+		}
+		if err := validation.Validate(*request.FileURL, is.URL); err != nil {
+			return pkgError.ValidationError("FileURL must be a valid URL")
+		}
 	}
 
 	if err := validateDuration(request.Duration); err != nil {

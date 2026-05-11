@@ -6,25 +6,30 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"sync"
 	"time"
 
+	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	domainUser "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/user"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	pkgError "github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/error"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/validations"
 	"github.com/disintegration/imaging"
+	"github.com/sirupsen/logrus"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/types"
 )
 
 type serviceUser struct {
-	// Remove the WaCli field - we'll use the global client instead
+	chatStorageRepo domainChatStorage.IChatStorageRepository
 }
 
-func NewUserService() domainUser.IUserUsecase {
-	return &serviceUser{}
+func NewUserService(chatStorageRepo domainChatStorage.IChatStorageRepository) domainUser.IUserUsecase {
+	return &serviceUser{
+		chatStorageRepo: chatStorageRepo,
+	}
 }
 
 func (service serviceUser) Info(ctx context.Context, request domainUser.InfoRequest) (response domainUser.InfoResponse, err error) {
@@ -44,13 +49,42 @@ func (service serviceUser) Info(ctx context.Context, request domainUser.InfoRequ
 		return response, err
 	}
 
+	// Parse original input to check if it was a LID
+	originalJID, _ := utils.ParseJID(request.Phone)
+	wasLID := originalJID.Server == "lid"
+
+	// If input was LID and resolved to phone, include resolved phone
+	if wasLID && dataWaRecipient.Server == types.DefaultUserServer {
+		response.ResolvedPhone = dataWaRecipient.User
+	}
+
+	// If input was phone number, try to get corresponding LID
+	if dataWaRecipient.Server == types.DefaultUserServer {
+		lid := utils.ResolvePhoneToLID(ctx, dataWaRecipient, client)
+		if !lid.IsEmpty() {
+			response.ResolvedLID = lid.String()
+		}
+	}
+
 	jids = append(jids, dataWaRecipient)
 	resp, err := client.GetUserInfo(ctx, jids)
 	if err != nil {
 		return response, err
 	}
 
-	for _, userInfo := range resp {
+	// Get device ID for scoped storage lookup
+	deviceID := ""
+	if inst, ok := whatsapp.DeviceFromContext(ctx); ok && inst != nil {
+		deviceID = inst.JID()
+		if deviceID == "" {
+			deviceID = inst.ID()
+		}
+	}
+	if deviceID == "" && client.Store != nil && client.Store.ID != nil {
+		deviceID = client.Store.ID.ToNonAD().String()
+	}
+
+	for jid, userInfo := range resp {
 		var device []domainUser.InfoResponseDataDevice
 		for _, j := range userInfo.Devices {
 			device = append(device, domainUser.InfoResponseDataDevice{
@@ -67,6 +101,16 @@ func (service serviceUser) Info(ctx context.Context, request domainUser.InfoRequ
 			PictureID: userInfo.PictureID,
 			Devices:   device,
 		}
+
+		// Try to get name from storage if available (device-scoped to prevent data leak)
+		if service.chatStorageRepo != nil && deviceID != "" {
+			if chat, err := service.chatStorageRepo.GetChatByDevice(deviceID, jid.String()); err == nil && chat != nil {
+				data.Name = chat.Name
+			} else if err != nil {
+				logrus.Debugf("Could not fetch chat name from storage for %s: %v", jid.String(), err)
+			}
+		}
+
 		if userInfo.VerifiedName != nil {
 			data.VerifiedName = fmt.Sprintf("%v", *userInfo.VerifiedName)
 		}
@@ -82,51 +126,73 @@ func (service serviceUser) Avatar(ctx context.Context, request domainUser.Avatar
 		return response, pkgError.ErrWaCLI
 	}
 
-	chanResp := make(chan domainUser.AvatarResponse)
-	chanErr := make(chan error)
-	waktu := time.Now()
+	err = validations.ValidateUserAvatar(ctx, request)
+	if err != nil {
+		return response, err
+	}
 
-	go func() {
-		err = validations.ValidateUserAvatar(ctx, request)
-		if err != nil {
-			chanErr <- err
-		}
-		dataWaRecipient, err := utils.ValidateJidWithLogin(client, request.Phone)
-		if err != nil {
-			chanErr <- err
-		}
-		pic, err := client.GetProfilePictureInfo(ctx, dataWaRecipient, &whatsmeow.GetProfilePictureParams{
-			Preview:     request.IsPreview,
-			IsCommunity: request.IsCommunity,
-		})
-		if err != nil {
-			chanErr <- err
-		} else if pic == nil {
-			chanErr <- errors.New("no avatar found")
-		} else {
-			response.URL = pic.URL
-			response.ID = pic.ID
-			response.Type = pic.Type
+	dataWaRecipient, err := utils.ValidateJidWithLogin(client, request.Phone)
+	if err != nil {
+		return response, err
+	}
 
-			chanResp <- response
-		}
-	}()
+	// IsCommunity should only be true for group JIDs (communities)
+	// For regular user JIDs (@s.whatsapp.net), force IsCommunity to false to prevent timeout
+	isCommunity := request.IsCommunity
+	if dataWaRecipient.Server == types.DefaultUserServer {
+		isCommunity = false
+	}
 
-	for {
-		select {
-		case err := <-chanErr:
-			return response, err
-		case response := <-chanResp:
-			return response, nil
-		default:
-			if waktu.Add(2 * time.Second).Before(time.Now()) {
-				return response, pkgError.ContextError("Error timeout get avatar !")
+	avatarCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	pic, err := client.GetProfilePictureInfo(avatarCtx, dataWaRecipient, &whatsmeow.GetProfilePictureParams{
+		Preview:     request.IsPreview,
+		IsCommunity: isCommunity,
+	})
+	if err != nil {
+		if avatarCtx.Err() == context.DeadlineExceeded {
+			return response, pkgError.ContextError("Error timeout get avatar!")
+		}
+		// If is_community=true failed, retry with is_community=false as fallback
+		if isCommunity {
+			avatarCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel2()
+
+			pic, err = client.GetProfilePictureInfo(avatarCtx2, dataWaRecipient, &whatsmeow.GetProfilePictureParams{
+				Preview:     request.IsPreview,
+				IsCommunity: false,
+			})
+			if err != nil {
+				if avatarCtx2.Err() == context.DeadlineExceeded {
+					return response, pkgError.ContextError("Error timeout get avatar!")
+				}
+				return response, err
 			}
+		} else {
+			return response, err
 		}
 	}
 
+	if pic == nil {
+		return response, errors.New("no avatar found")
+	}
+
+	response.URL = pic.URL
+	response.ID = pic.ID
+	response.Type = pic.Type
+	return response, nil
 }
 
+// MyListGroups returns all groups the user has joined.
+//
+// ⚠️ KNOWN LIMITATION: This endpoint returns a maximum of 500 groups due to a WhatsApp protocol limitation.
+// The underlying whatsmeow library's GetJoinedGroups() function sends a single "participating" IQ query
+// to WhatsApp servers, which enforces this limit server-side. This is not a bug - it's a constraint
+// imposed by WhatsApp's multi-device protocol. Pagination is not supported by WhatsApp for this query.
+//
+// For more details, see: https://github.com/tulir/whatsmeow/blob/main/group.go
+// Related issue: https://github.com/aldinokemal/go-whatsapp-web-multidevice/issues/553
 func (service serviceUser) MyListGroups(ctx context.Context) (response domainUser.MyListGroupsResponse, err error) {
 	client := whatsapp.ClientFromContext(ctx)
 	if client == nil {
@@ -157,7 +223,51 @@ func (service serviceUser) MyListNewsletter(ctx context.Context) (response domai
 		return
 	}
 
+	// GetSubscribedNewsletters may return incomplete metadata from WhatsApp,
+	// especially subscribers_count. Enrich entries that are missing the count via
+	// GetNewsletterInfo with bounded parallelism so we don't fan out unboundedly
+	// to the WhatsApp socket, and a per-call timeout so one slow newsletter
+	// cannot stall the whole request.
+	const (
+		newsletterDetailParallelism = 5
+		newsletterDetailTimeout     = 5 * time.Second
+	)
+
+	sem := make(chan struct{}, newsletterDetailParallelism)
+	var wg sync.WaitGroup
 	for _, data := range datas {
+		if data == nil {
+			continue
+		}
+		// Skip the detail fetch when the base response already populated the count.
+		if data.ThreadMeta.SubscriberCount > 0 {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(d *types.NewsletterMetadata) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			detailCtx, cancel := context.WithTimeout(ctx, newsletterDetailTimeout)
+			defer cancel()
+
+			detail, detailErr := client.GetNewsletterInfo(detailCtx, d.ID)
+			if detailErr != nil {
+				logrus.Debugf("Could not fetch newsletter detail for %s: %v", d.ID.String(), detailErr)
+				return
+			}
+			if detail != nil {
+				d.ThreadMeta.SubscriberCount = detail.ThreadMeta.SubscriberCount
+			}
+		}(data)
+	}
+	wg.Wait()
+
+	for _, data := range datas {
+		if data == nil {
+			continue
+		}
 		response.Data = append(response.Data, *data)
 	}
 	return response, nil

@@ -169,6 +169,7 @@
     window.TYPEGROUP = "@g.us";
     window.TYPEUSER = "@s.whatsapp.net";
     window.TYPENEWSLETTER = "@newsletter";
+    window.TYPELID = "@lid";
     window.TYPESTATUS = "status@broadcast";
     window.showErrorInfo = (message) => {
         $('body').toast({
@@ -299,7 +300,7 @@
         methods: {
             applyDeviceHeader(id) {
                 if (id) {
-                    window.http.defaults.headers.common[DEVICE_ID_HEADER] = id;
+                    window.http.defaults.headers.common[DEVICE_ID_HEADER] = encodeURIComponent(id);
                 } else {
                     delete window.http.defaults.headers.common[DEVICE_ID_HEADER];
                     if (this.app_ws) {

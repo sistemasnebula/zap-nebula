@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"net/url"
 	"strings"
 
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/gofiber/fiber/v2"
@@ -15,14 +17,14 @@ const DeviceIDHeader = "X-Device-Id"
 func DeviceMiddleware(dm *whatsapp.DeviceManager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := strings.TrimSpace(c.Path())
-		
+
 		// Allow non-device-scoped public endpoints (e.g., landing page) to pass through.
-		if path == "/" || path == "" {
+		if path == "/" || path == "" || path == config.AppBasePath || path == config.AppBasePath+"/" {
 			return c.Next()
 		}
-		
-		// Allow static file routes to pass through (statics, components, assets)
-		// Check if path contains these segments (works with or without AppBasePath)
+
+		// Allow static file routes to pass through (statics, components, assets).
+		// Works with or without AppBasePath prefix.
 		if strings.Contains(path, "/statics/") ||
 			strings.Contains(path, "/components/") ||
 			strings.Contains(path, "/assets/") {
@@ -39,6 +41,10 @@ func DeviceMiddleware(dm *whatsapp.DeviceManager) fiber.Handler {
 		}
 
 		deviceID := strings.TrimSpace(c.Get(DeviceIDHeader))
+		// URL-decode the header value to support non-ASCII characters
+		if decoded, err := url.QueryUnescape(deviceID); err == nil {
+			deviceID = decoded
+		}
 		if deviceID == "" {
 			deviceID = strings.TrimSpace(c.Query("device_id"))
 		}

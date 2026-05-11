@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +67,19 @@ func (m *DeviceManager) GetDevice(id string) (*DeviceInstance, bool) {
 	defer m.mu.RUnlock()
 	instance, ok := m.devices[id]
 	return instance, ok
+}
+
+// IsHealthy returns true if the device manager is initialized and has a valid store connection.
+// Note: This is a service initialization check, not a live connectivity check.
+// Returning true indicates the internal store is ready, but does not guarantee
+// that any WhatsApp device connections are currently active or authenticated.
+func (m *DeviceManager) IsHealthy() bool {
+	if m == nil {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.store != nil
 }
 
 // DefaultDevice returns the only registered device when running in single-device mode.
@@ -235,10 +249,20 @@ func (m *DeviceManager) ListDevices() []*DeviceInstance {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var result []*DeviceInstance
+	result := make([]*DeviceInstance, 0, len(m.devices))
 	for _, instance := range m.devices {
 		result = append(result, instance)
 	}
+
+	// Sort by CreatedAt ascending (oldest first) for stable UI ordering.
+	// Use ID as tie-breaker when CreatedAt is equal.
+	slices.SortFunc(result, func(a, b *DeviceInstance) int {
+		if cmp := a.CreatedAt().Compare(b.CreatedAt()); cmp != 0 {
+			return cmp
+		}
+		return strings.Compare(a.ID(), b.ID())
+	})
+
 	return result
 }
 
@@ -467,8 +491,12 @@ func (m *DeviceManager) EnsureClient(ctx context.Context, deviceID string) (*Dev
 		inst.SetChatStorage(repo)
 	}
 
-	client.AddEventHandler(func(rawEvt interface{}) {
+	client.AddEventHandler(func(rawEvt any) {
 		handler(ctx, inst, rawEvt)
+	})
+
+	inst.SetOnLoggedOut(func(deviceID string) {
+		m.RemoveDevice(deviceID)
 	})
 
 	inst.SetClient(client)

@@ -5,11 +5,11 @@ import (
 )
 
 var (
-	AppVersion             = "v8.1.0"
+	AppVersion             = "v8.5.0"
 	AppPort                = "3000"
 	AppHost                = "0.0.0.0"
 	AppDebug               = false
-	AppOs                  = "NS-zap"
+	AppOs                  = "NS-Zap"
 	AppPlatform            = waCompanionReg.DeviceProps_PlatformType(1)
 	AppBasicAuthCredential []string
 	AppBasePath            = ""
@@ -24,7 +24,7 @@ var (
 	PathStorages  = "storages"
 	PathDatabase  = "database"
 
-	DBURI     = "file:database/whatsapp.db?_foreign_keys=on"
+	DBURI     = "file:database/whatsapp.db?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000"
 	DBKeysURI = ""
 
 	WhatsappAutoReplyMessage          string
@@ -32,8 +32,9 @@ var (
 	WhatsappAutoDownloadMedia         = true  // Auto-download media from incoming messages
 	WhatsappWebhook                   []string
 	WhatsappWebhookSecret             = "secret"
-	WhatsappWebhookInsecureSkipVerify = false  // Skip TLS certificate verification for webhooks (insecure)
-	WhatsappWebhookEvents             []string // Whitelist of events to forward to webhook (empty = all events)
+	WhatsappWebhookInsecureSkipVerify = false          // Skip TLS certificate verification for webhooks (insecure)
+	WhatsappWebhookEvents             []string         // Whitelist of events to forward to webhook (empty = all events)
+	WhatsappAutoRejectCall                     = false // Auto-reject incoming calls
 	WhatsappLogLevel                           = "ERROR"
 	WhatsappSettingMaxImageSize       int64    = 20000000  // 20MB
 	WhatsappSettingMaxFileSize        int64    = 50000000  // 50MB
@@ -41,9 +42,22 @@ var (
 	WhatsappSettingMaxDownloadSize    int64    = 500000000 // 500MB
 	WhatsappTypeUser                           = "@s.whatsapp.net"
 	WhatsappTypeGroup                          = "@g.us"
+	WhatsappTypeLid                            = "@lid"
 	WhatsappAccountValidation                  = true
+	WhatsappPresenceOnConnect                  = "unavailable" // Presence to send on connect: "available", "unavailable", or "none"
 
 	ChatStorageURI               = "file:database/chatstorage.db"
 	ChatStorageEnableForeignKeys = true
 	ChatStorageEnableWAL         = true
+
+	ChatwootEnabled   = false
+	ChatwootURL       = ""
+	ChatwootAPIToken  = ""
+	ChatwootAccountID = 0
+	ChatwootInboxID   = 0
+	ChatwootDeviceID  = "" // Device ID for outbound messages (required for multi-device)
+
+	// Chatwoot History Sync settings
+	ChatwootImportMessages          = false // Enable message history import to Chatwoot
+	ChatwootDaysLimitImportMessages = 3     // Days of history to import (default: 3)
 )

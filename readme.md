@@ -67,11 +67,20 @@ Download:
 - Mention someone
   - `@phoneNumber`
   - example: `Hello @628974812XXXX, @628974812XXXX`
+- **Ghost Mentions (Mention All)** - Mention group participants without showing `@phone` in message text
+  - Pass phone numbers in `mentions` field to mention users without visible `@` in message
+  - Use special keyword `@everyone` to automatically mention ALL group participants
+  - UI checkbox available in Send Message modal for groups
 - Post Whatsapp Status
 - **Send Stickers** - Automatically converts images to WebP sticker format
   - Supports JPG, JPEG, PNG, WebP, and GIF formats
   - Automatic resizing to 512x512 pixels
   - Preserves transparency for PNG images
+  - **Animated WebP stickers** are supported but must meet WhatsApp requirements:
+    - Must be exactly **512x512 pixels**
+    - Must be under **500KB** file size
+    - Maximum **10 seconds** duration
+    - If your animated sticker doesn't meet these requirements, please resize it before uploading using tools like [ezgif.com](https://ezgif.com/resize)
 - Compress image before send
 - Compress video before send
 - Change OS name become your app (it's the device name when connect via mobile)
@@ -90,6 +99,13 @@ Download:
   - `--auto-mark-read=true` (automatically marks incoming messages as read)
 - Auto download media from incoming messages
   - `--auto-download-media=false` (disable automatic media downloads, default: `true`)
+- Auto reject incoming calls
+  - `--auto-reject-call=true` or `WHATSAPP_AUTO_REJECT_CALL=true` (see [Webhook Payload](./docs/webhook-payload.md#call-events) for call events)
+- Configurable presence on connect
+  - `--presence-on-connect=unavailable` or `WHATSAPP_PRESENCE_ON_CONNECT=unavailable`
+  - `available` — mark as online (suppresses phone notifications)
+  - `unavailable` — register pushname without going online (default, preserves phone notifications)
+  - `none` — skip presence entirely (pushname won't be registered, contacts may see "-" as name)
 - Webhook for received message
   - `--webhook="http://yourwebhook.site/handler"`, or you can simplify
   - `-w="http://yourwebhook.site/handler"`
@@ -116,7 +132,14 @@ Download:
   | `message.revoked`    | Deleted/revoked messages                      |
   | `message.edited`     | Edited messages                               |
   | `message.ack`        | Delivery and read receipts                    |
+  | `message.deleted`    | Messages deleted for the user                 |
   | `group.participants` | Group member join/leave/promote/demote events |
+  | `group.joined`       | You were added to a group                     |
+  | `newsletter.joined`  | You subscribed to a newsletter/channel        |
+  | `newsletter.left`    | You unsubscribed from a newsletter            |
+  | `newsletter.message` | New message(s) posted in a newsletter         |
+  | `newsletter.mute`    | Newsletter mute setting changed               |
+  | `call.offer`         | Incoming call received                        |
 
   If not configured (empty), all events will be forwarded.
 - **Webhook TLS Configuration**
@@ -184,6 +207,20 @@ To use environment variables:
 | `WHATSAPP_WEBHOOK_INSECURE_SKIP_VERIFY` | Skip TLS verification for webhooks (insecure)                 | `false`                                      | `WHATSAPP_WEBHOOK_INSECURE_SKIP_VERIFY=true`  |
 | `WHATSAPP_WEBHOOK_EVENTS`               | Whitelist of events to forward (comma-separated, empty = all) | -                                            | `WHATSAPP_WEBHOOK_EVENTS=message,message.ack` |
 | `WHATSAPP_ACCOUNT_VALIDATION`           | Enable account validation                                     | `true`                                       | `WHATSAPP_ACCOUNT_VALIDATION=false`           |
+| `WHATSAPP_PRESENCE_ON_CONNECT`          | Presence on connect: `available`, `unavailable`, or `none`    | `unavailable`                                | `WHATSAPP_PRESENCE_ON_CONNECT=unavailable`    |
+| `CHATWOOT_ENABLED`                      | Enable Chatwoot integration                                   | `false`                                      | `CHATWOOT_ENABLED=true`                       |
+| `CHATWOOT_URL`                          | Chatwoot instance URL                                         | -                                            | `CHATWOOT_URL=https://app.chatwoot.com`       |
+| `CHATWOOT_API_TOKEN`                    | Chatwoot API access token                                     | -                                            | `CHATWOOT_API_TOKEN=your-api-token`           |
+| `CHATWOOT_ACCOUNT_ID`                   | Chatwoot account ID                                           | -                                            | `CHATWOOT_ACCOUNT_ID=12345`                   |
+| `CHATWOOT_INBOX_ID`                     | Chatwoot inbox ID                                             | -                                            | `CHATWOOT_INBOX_ID=67890`                     |
+| `CHATWOOT_DEVICE_ID`                    | WhatsApp device ID for Chatwoot (multi-device setup)          | -                                            | `CHATWOOT_DEVICE_ID=628xxx@s.whatsapp.net`    |
+| `CHATWOOT_IMPORT_MESSAGES`              | Enable message history sync to Chatwoot                       | `false`                                      | `CHATWOOT_IMPORT_MESSAGES=true`               |
+| `CHATWOOT_DAYS_LIMIT_IMPORT_MESSAGES`   | Days of history to import                                     | `3`                                          | `CHATWOOT_DAYS_LIMIT_IMPORT_MESSAGES=7`       |
+
+**Documentation:**
+
+- For detailed webhook payload schemas, security implementation, and integration examples, see [Webhook Payload Documentation](./docs/webhook-payload.md)
+- For comprehensive Chatwoot integration guide, see [Chatwoot Integration Documentation](./docs/chatwoot.md)
 
 Note: Command-line flags will override any values set in environment variables or `.env` file.
 
@@ -205,14 +242,18 @@ Note: Command-line flags will override any values set in environment variables o
 ### Dependencies (without docker)
 
 - Mac OS:
-  - `brew install ffmpeg`
+  - `brew install ffmpeg webp`
   - `export CGO_CFLAGS_ALLOW="-Xpreprocessor"`
 - Linux:
   - `sudo apt update`
-  - `sudo apt install ffmpeg`
-- Windows (not recomended, prefer using [WSL](https://docs.microsoft.com/en-us/windows/wsl/install)):
-  - install ffmpeg, [download here](https://www.ffmpeg.org/download.html#build-windows)
-  - add to ffmpeg to [environment variable](https://www.google.com/search?q=windows+add+to+environment+path)
+  - `sudo apt install ffmpeg webp`
+- Windows (not recommended, prefer using [WSL](https://docs.microsoft.com/en-us/windows/wsl/install)):
+  - Install ffmpeg: [download here](https://www.ffmpeg.org/download.html#build-windows)
+  - Install libwebp: [download here](https://developers.google.com/speed/webp/download) (extract and add `bin` folder to PATH)
+  - Add both to [environment variable](https://www.google.com/search?q=windows+add+to+environment+path)
+
+> **Note**: The `webp` package provides `cwebp` (encoder), `dwebp` (decoder), and `webpmux` (frame extractor) tools.
+> FFmpeg is required for media processing. The libwebp tools (`webpmux` + `dwebp`) are used for animated WebP sticker support.
 
 ## How to use
 
@@ -458,7 +499,6 @@ You can fork or edit this source code !
 
 ### HTTP REST API
 
-- [API Specification Document](https://bump.sh/aldinokemal/doc/go-whatsapp-web-multidevice).
 - Check [docs/openapi.yml](./docs/openapi.yaml) for detailed API specifications.
 - Use [SwaggerEditor](https://editor.swagger.io) to visualize the API.
 - Generate HTTP clients using [openapi-generator](https://openapi-generator.tech/#try).
@@ -484,7 +524,7 @@ You can fork or edit this source code !
 | ✅       | User Avatar                            | GET    | /user/avatar                        |
 | ✅       | User Change Avatar                     | POST   | /user/avatar                        |
 | ✅       | User Change PushName                   | POST   | /user/pushname                      |
-| ✅       | User My Groups                         | GET    | /user/my/groups                     |
+| ✅       | User My Groups*                        | GET    | /user/my/groups                     |
 | ✅       | User My Newsletter                     | GET    | /user/my/newsletters                |
 | ✅       | User My Privacy Setting                | GET    | /user/my/privacy                    |
 | ✅       | User My Contacts                       | GET    | /user/my/contacts                   |
@@ -541,7 +581,12 @@ You can fork or edit this source code !
 ```
 ✅ = Available
 ❌ = Not Available Yet
+* = Has known limitations (see notes below)
 ```
+
+**Notes:**
+
+- `*User My Groups`: Returns a maximum of 500 groups due to WhatsApp protocol limitation. This is enforced by WhatsApp servers, not this API. See [whatsmeow source](https://github.com/tulir/whatsmeow/blob/main/group.go) for details.
 
 ## User Interface
 

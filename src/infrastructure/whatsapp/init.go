@@ -110,7 +110,7 @@ func InitWaCLI(ctx context.Context, storeContainer, keysStoreContainer *sqlstore
 	deviceRepo := newDeviceChatStorage(instanceID, chatStorageRepo)
 	instance := NewDeviceInstance(instanceID, client, deviceRepo)
 
-	client.AddEventHandler(func(rawEvt interface{}) {
+	client.AddEventHandler(func(rawEvt any) {
 		handler(ctx, instance, rawEvt)
 	})
 
@@ -122,6 +122,9 @@ func InitWaCLI(ctx context.Context, storeContainer, keysStoreContainer *sqlstore
 	dm := InitializeDeviceManager(storeContainer, keysStoreContainer, deviceRepo)
 	if dm != nil && instanceID != "" {
 		dm.EnsureDefault(instance)
+		instance.SetOnLoggedOut(func(deviceID string) {
+			dm.RemoveDevice(deviceID)
+		})
 	}
 
 	globalStateMu.Lock()
