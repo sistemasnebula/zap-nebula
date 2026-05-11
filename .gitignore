@@ -18,3 +18,4 @@ bin
 src/whatsapp
 .worktrees/
 src/gowa
+src/statics

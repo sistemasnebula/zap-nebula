@@ -32,7 +32,10 @@ WORKDIR /app
 # Copy compiled from builder.
 COPY --from=builder /app/whatsapp /app/whatsapp
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && chown -R gowauser:gowa /app
+# Strip Windows CRLF so #!/bin/sh is not interpreted as /bin/sh\r (fixes "exec /entrypoint.sh: no such file or directory")
+RUN sed 's/\r$//' /entrypoint.sh > /tmp/entrypoint.sh && \
+	mv /tmp/entrypoint.sh /entrypoint.sh && \
+	chmod +x /entrypoint.sh && chown -R gowauser:gowa /app
 
 # Root only for entrypoint (ownership fix on volumes); process becomes gowauser.
 USER root

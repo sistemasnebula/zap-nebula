@@ -6,7 +6,7 @@ services:
     container_name: whatsapp-local
     restart: always
     ports:
-      - "3500:3000"
+      - "3600:3000"
     volumes:
       - whatsapp:/app/storages
       - ./src/statics:/app/statics
