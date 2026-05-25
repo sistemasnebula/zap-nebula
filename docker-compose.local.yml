@@ -12,6 +12,7 @@ services:
       - ./src/statics:/app/statics
     environment:
       WHATSAPP_WEBHOOK: https://webhook.site/81ff43c2-547b-4c8b-8ad1-f9d503621faa
+      APP_BASIC_AUTH: "nsadmin:102030"
     command:
       - rest
       #- --basic-auth=admin:admin
