@@ -164,6 +164,14 @@ func processConversationMessages(ctx context.Context, data *waHistorySync.Histor
 				}
 			} else {
 				participant := msgKey.GetParticipant()
+				if participant == "" {
+					// History-sync group messages carry the sender in the
+					// WebMessageInfo-level `participant` (usually a @lid), NOT in
+					// key.participant (which is empty for synced group messages).
+					// Without this fallback, every inbound group message in a
+					// history sync is dropped below as "no participant info".
+					participant = msg.GetParticipant()
+				}
 				if participant != "" {
 					// For group messages, participant contains the actual sender
 					if parsedSenderJID, err := types.ParseJID(participant); err == nil {
@@ -232,7 +240,7 @@ func processConversationMessages(ctx context.Context, data *waHistorySync.Histor
 
 			// Extract message content and media info
 			content := utils.ExtractMessageTextFromProto(msg.GetMessage())
-			mediaType, filename, url, mediaKey, fileSHA256, fileEncSHA256, fileLength := utils.ExtractMediaInfo(msg.GetMessage())
+			mediaType, filename, mediaURL, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength := utils.ExtractMediaInfo(msg.GetMessage())
 
 			// Skip if there's no content and no media
 			if content == "" && mediaType == "" {
@@ -255,7 +263,8 @@ func processConversationMessages(ctx context.Context, data *waHistorySync.Histor
 				IsFromMe:      isFromMe,
 				MediaType:     mediaType,
 				Filename:      filename,
-				URL:           url,
+				URL:           mediaURL,
+				DirectPath:    directPath,
 				MediaKey:      mediaKey,
 				FileSHA256:    fileSHA256,
 				FileEncSHA256: fileEncSHA256,
